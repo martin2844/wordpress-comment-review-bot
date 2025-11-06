@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions & Support
+    url: https://github.com/martindev/wordpress-review-bot/discussions
+    about: Ask questions and get support from the community
+  - name: WordPress.org Support Forum
+    url: https://wordpress.org/support/plugin/wordpress-review-bot/
+    about: Get support from the WordPress community

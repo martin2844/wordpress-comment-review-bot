@@ -1,0 +1,53 @@
+# Distribution ignore file for WordPress Review Bot
+# These files will be excluded from the release package
+
+# Development and build files
+/src/
+/node_modules/
+/.git/
+/.github/
+.gitignore
+package.json
+package-lock.json
+vite.config.js
+tailwind.config.js
+composer.json
+composer.lock
+.gitattributes
+
+# Development configuration
+docker-compose.yml
+docker-compose.override.yml
+Dockerfile
+wp-config.php
+.env
+
+# Documentation and development files
+README.md
+EXPLAIN.md
+phpunit.xml*
+phpcs.xml
+phpstan.neon
+
+# Testing
+/tests/
+/.vscode/
+.idea/
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+*.log
+
+# Development assets
+assets/css/src/
+assets/js/src/
+
+# Backup and cache files
+*.bak
+*.swp
+*.tmp
+
+# Local development
+.local/
+.cache/

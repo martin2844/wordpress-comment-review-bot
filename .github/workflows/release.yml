@@ -1,0 +1,77 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: './package-lock.json'
+
+    - name: Install Node dependencies
+      run: npm ci
+
+    - name: Build production assets
+      run: npm run build
+
+    - name: Create release package
+      run: |
+        # Create release directory
+        mkdir release
+
+        # Copy plugin files (excluding development files)
+        rsync -av --exclude-from=.distignore plugin/ release/wordpress-review-bot/
+
+        # Create zip file
+        cd release
+        zip -r ../wordpress-review-bot.zip wordpress-review-bot/
+        cd ..
+
+        # Generate SHA256 checksum
+        sha256sum wordpress-review-bot.zip > wordpress-review-bot.zip.sha256
+
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          wordpress-review-bot.zip
+          wordpress-review-bot.zip.sha256
+        draft: false
+        prerelease: false
+        generate_release_notes: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Update WordPress.org Readme
+      run: |
+        # This step would be used to deploy to WordPress.org
+        # You'll need to set up separate deployment for WordPress.org
+        echo "Ready for WordPress.org deployment"
+        echo "Tag: ${{ github.ref_name }}"
+        echo "Zip file created: wordpress-review-bot.zip"
+
+  notify:
+    needs: build-release
+    runs-on: ubuntu-latest
+    if: success()
+
+    steps:
+    - name: Notify Release
+      run: |
+        echo "🎉 WordPress Review Bot ${{ github.ref_name }} has been released!"
+        echo "📦 Download: https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }}"
+        echo "🚀 Ready for WordPress.org submission"

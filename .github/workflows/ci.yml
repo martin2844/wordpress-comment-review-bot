@@ -1,0 +1,151 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        php-version: ['8.0', '8.1', '8.2', '8.3']
+        wordpress-version: ['6.0', '6.1', '6.2', '6.3', '6.4', '6.5', '6.6', '6.7']
+
+    name: PHP ${{ matrix.php-version }} | WP ${{ matrix.wordpress-version }}
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup PHP
+      uses: shivammathur/setup-php@v2
+      with:
+        php-version: ${{ matrix.php-version }}
+        extensions: dom, curl, libxml, mbstring, zip, pcntl, pdo, sqlite, pdo_sqlite, bcmath, soap, intl, gd, exif, iconv, imagick
+        coverage: none
+
+    - name: Get Composer Cache Directory
+      id: composer-cache
+      run: |
+        echo "dir=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
+
+    - name: Cache Composer dependencies
+      uses: actions/cache@v3
+      with:
+        path: ${{ steps.composer-cache.outputs.dir }}
+        key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-composer-
+
+    - name: Install Composer dependencies
+      run: composer install --prefer-dist --no-progress --no-suggest --optimize-autoloader
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: './package-lock.json'
+
+    - name: Install Node dependencies
+      run: npm ci
+
+    - name: Build assets
+      run: npm run build
+
+    - name: Validate composer.json and composer.lock
+      run: composer validate --strict
+
+    - name: Check PHP code style
+      run: |
+        if [ -f vendor/bin/phpcs ]; then
+          vendor/bin/phpcs --standard=WordPress-Core --extensions=php plugin/
+        fi
+
+    - name: Run PHPStan
+      run: |
+        if [ -f vendor/bin/phpstan ]; then
+          vendor/bin/phpstan analyse plugin/
+        fi
+
+    - name: WordPress Plugin Check
+      run: |
+        # Install WordPress Plugin Checker
+        composer global require wp-cli/wp-cli
+        composer global require wp-cli/plugin-command
+
+        # Check plugin
+        ~/.composer/vendor/bin/wp plugin verify plugin/wordpress-review-bot.php || true
+
+    - name: Check plugin file headers
+      run: |
+        # Validate plugin headers
+        php -l plugin/wordpress-review-bot.php
+
+        # Check if required headers exist
+        if ! grep -q "Plugin Name:" plugin/wordpress-review-bot.php; then
+          echo "Error: Plugin Name header missing"
+          exit 1
+        fi
+
+        if ! grep -q "Version:" plugin/wordpress-review-bot.php; then
+          echo "Error: Version header missing"
+          exit 1
+        fi
+
+        if ! grep -q "Text Domain:" plugin/wordpress-review-bot.php; then
+          echo "Error: Text Domain header missing"
+          exit 1
+        fi
+
+    - name: Validate readme.txt
+      run: |
+        # Check if readme.txt follows WordPress.org guidelines
+        if [ ! -f plugin/readme.txt ]; then
+          echo "Error: readme.txt is required for WordPress.org submission"
+          exit 1
+        fi
+
+        # Check for required sections
+        required_sections=("Description" "Installation" "Frequently Asked Questions" "Changelog")
+        for section in "${required_sections[@]}"; do
+          if ! grep -q "== $section ==" plugin/readme.txt; then
+            echo "Error: Required section '$section' missing from readme.txt"
+            exit 1
+          fi
+        done
+
+    - name: Check for potential security issues
+      run: |
+        # Check for common security issues
+        echo "Checking for potential security issues..."
+
+        # Look for unescaped output
+        if grep -r "echo.*\$.*;" plugin/ --include="*.php" | grep -v "esc_"; then
+          echo "Warning: Found potential unescaped output"
+        fi
+
+        # Look for direct database queries without preparation
+        if grep -r "\$wpdb->query" plugin/ --include="*.php" | grep -v "prepare"; then
+          echo "Warning: Found potentially unprepared database queries"
+        fi
+
+        # Look for file operations without validation
+        if grep -r "file_get_contents\|file_put_contents\|fopen" plugin/ --include="*.php" | grep -v "wp_remote_get\|wp_remote_post"; then
+          echo "Warning: Found direct file operations that may need validation"
+        fi
+
+    - name: Archive artifacts
+      uses: actions/upload-artifact@v3
+      if: matrix.php-version == '8.2' && matrix.wordpress-version == '6.7'
+      with:
+        name: wordpress-review-bot-${{ github.sha }}
+        path: |
+          plugin/
+          !plugin/node_modules/
+          !plugin/src/
+        retention-days: 30

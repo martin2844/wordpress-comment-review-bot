@@ -1,0 +1,72 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* WordPress Review Bot Custom Styles */
+.wrb-admin {
+  @apply p-5 font-wp;
+}
+
+.wrb-header {
+  @apply border-b border-gray-200 pb-4 mb-6;
+}
+
+.wrb-title {
+  @apply text-2xl font-semibold text-wp-dark mb-0;
+}
+
+.wrb-card {
+  @apply bg-white border border-gray-200 rounded-lg p-6 mb-6 shadow-sm;
+}
+
+.wrb-button {
+  @apply bg-wp-blue text-white border-0 py-2 px-4 rounded cursor-pointer text-sm transition-colors hover:bg-blue-700;
+}
+
+.wrb-status {
+  @apply inline-block py-1 px-2 rounded-full text-xs font-medium;
+}
+
+.wrb-status.active {
+  @apply bg-green-100 text-green-800;
+}
+
+.wrb-status.inactive {
+  @apply bg-red-100 text-red-800;
+}
+
+.wrb-container {
+  @apply max-w-6xl mx-auto p-5 font-wp;
+}
+
+.wrb-review-card {
+  @apply bg-white border border-gray-200 rounded-lg p-5 mb-4 shadow-sm transition-shadow hover:shadow-md;
+}
+
+.wrb-review-header {
+  @apply flex justify-between items-center mb-3;
+}
+
+.wrb-review-title {
+  @apply text-lg font-semibold text-wp-dark mb-0;
+}
+
+.wrb-review-meta {
+  @apply text-sm text-wp-gray mb-2;
+}
+
+.wrb-review-content {
+  @apply text-slate-600 leading-relaxed;
+}
+
+.wrb-review-rating {
+  @apply flex gap-0.5 mb-2;
+}
+
+.wrb-star {
+  @apply text-yellow-400 text-base;
+}
+
+.wrb-star.empty {
+  @apply text-gray-200;
+}
