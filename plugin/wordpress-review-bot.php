@@ -242,5 +242,19 @@ class WordPress_Review_Bot {
 	}
 }
 
+// Register deactivation hook to clean up cron jobs
+register_deactivation_hook(__FILE__, 'wrb_deactivate_cleanup');
+
+function wrb_deactivate_cleanup() {
+    // Clear all scheduled cron jobs
+    $timestamp = wp_next_scheduled('wrb_process_held_comments');
+    if ($timestamp) {
+        wp_unschedule_event($timestamp, 'wrb_process_held_comments');
+    }
+
+    // Clear any other scheduled events
+    wp_clear_scheduled_hook('wrb_process_held_comments');
+}
+
 // Initialize the plugin
 WordPress_Review_Bot::get_instance();

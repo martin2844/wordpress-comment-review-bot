@@ -70,6 +70,10 @@ $current_page = isset($_GET['paged']) ? max(1, intval($_GET['paged'])) : 1;
             <div class="wrb-stat-number"><?php echo number_format_i18n($stats['spam']); ?></div>
             <div class="wrb-stat-label"><?php _e('Marked as Spam', 'wordpress-review-bot'); ?></div>
         </div>
+        <div class="wrb-stat-card wrb-pending-review">
+            <div class="wrb-stat-number"><?php echo number_format_i18n(isset($stats['pending_review']) ? $stats['pending_review'] : 0); ?></div>
+            <div class="wrb-stat-label"><?php _e('Needs Review', 'wordpress-review-bot'); ?></div>
+        </div>
     </div>
 
     <!-- Filters -->
@@ -84,6 +88,7 @@ $current_page = isset($_GET['paged']) ? max(1, intval($_GET['paged'])) : 1;
                     <option value="approve" <?php selected($decision_filter, 'approve'); ?>><?php _e('Approved', 'wordpress-review-bot'); ?></option>
                     <option value="reject" <?php selected($decision_filter, 'reject'); ?>><?php _e('Rejected', 'wordpress-review-bot'); ?></option>
                     <option value="spam" <?php selected($decision_filter, 'spam'); ?>><?php _e('Spam', 'wordpress-review-bot'); ?></option>
+                    <option value="pending_review" <?php selected($decision_filter, 'pending_review'); ?>><?php _e('Needs Review', 'wordpress-review-bot'); ?></option>
                 </select>
             </div>
 
@@ -107,6 +112,36 @@ $current_page = isset($_GET['paged']) ? max(1, intval($_GET['paged'])) : 1;
     <!-- Decisions List -->
     <div class="wrb-decisions-list">
 
+            <?php
+            // Pending review box (always show if there are any pending_review decisions and not currently filtering to only them)
+            $pending_args = array(
+                'limit' => 10,
+                'offset' => 0,
+                'decision' => 'pending_review',
+                'orderby' => 'created_at',
+                'order' => 'DESC'
+            );
+            $pending_decisions = $comment_manager->get_ai_decisions($pending_args);
+            if (!empty($pending_decisions) && $decision_filter !== 'pending_review') : ?>
+                <div class="wrb-pending-review-box">
+                    <h2><?php _e('Needs Manual Review', 'wordpress-review-bot'); ?></h2>
+                    <p class="description"><?php _e('These comments had a low confidence score. Review and override if appropriate. They will not be re-analyzed.', 'wordpress-review-bot'); ?></p>
+                    <div class="wrb-pending-review-list">
+                        <?php foreach ($pending_decisions as $p): ?>
+                            <div class="wrb-pending-item">
+                                <strong>#<?php echo esc_html($p->comment_id); ?></strong>
+                                <span class="wrb-pending-confidence"><?php printf(__('Confidence: %s%%', 'wordpress-review-bot'), round($p->confidence * 100)); ?></span>
+                                <span class="wrb-pending-reasoning" style="display:block;margin-top:4px;">
+                                    <?php echo esc_html(wp_trim_words($p->reasoning, 25)); ?>
+                                </span>
+                                <a class="wrb-view-full" href="<?php echo esc_url(admin_url('comment.php?action=editcomment&c=' . $p->comment_id)); ?>" target="_blank"><?php _e('View Comment', 'wordpress-review-bot'); ?></a>
+                            </div>
+                        <?php endforeach; ?>
+                        <p><a href="<?php echo esc_url(add_query_arg('decision','pending_review', admin_url('admin.php?page=wrb-decisions'))); ?>" class="button button-small"><?php _e('View All Pending Review', 'wordpress-review-bot'); ?></a></p>
+                    </div>
+                </div>
+            <?php endif; ?>
+
         <?php if (!empty($decisions)): ?>
             <?php foreach ($decisions as $decision): ?>
                 <div class="wrb-decision-card" data-decision-id="<?php echo esc_attr($decision->id); ?>">
@@ -128,6 +163,9 @@ $current_page = isset($_GET['paged']) ? max(1, intval($_GET['paged'])) : 1;
                                     break;
                                 case 'spam':
                                     _e('Spam', 'wordpress-review-bot');
+                                    break;
+                                case 'pending_review':
+                                    _e('Needs Review', 'wordpress-review-bot');
                                     break;
                             }
                             ?>

@@ -12,6 +12,7 @@ $openai_key = isset($options['openai_api_key']) ? $options['openai_api_key'] : '
 $auto_moderation = isset($options['auto_moderation_enabled']) && $options['auto_moderation_enabled'];
 $webhook_url = isset($options['webhook_url']) ? $options['webhook_url'] : '';
 $model = isset($options['openai_model']) ? $options['openai_model'] : 'gpt-3.5-turbo';
+$reasoning_effort = isset($options['reasoning_effort']) ? $options['reasoning_effort'] : 'low';
 ?>
 
 <div class="wrap wrb-admin">
@@ -73,6 +74,23 @@ $model = isset($options['openai_model']) ? $options['openai_model'] : 'gpt-3.5-t
                             </optgroup>
                         </select>
                         <p class="description"><?php _e('Choose the AI model for comment analysis. GPT-5 Mini is recommended for most use cases.', 'wordpress-review-bot'); ?></p>
+                    </td>
+                </tr>
+
+                <tr id="wrb_reasoning_effort_row">
+                    <th scope="row">
+                        <label for="wrb_reasoning_effort"><?php _e('Reasoning Effort (GPT-5)', 'wordpress-review-bot'); ?></label>
+                    </th>
+                    <td>
+                        <select name="wrb_options[reasoning_effort]" id="wrb_reasoning_effort">
+                            <option value="low" <?php selected($reasoning_effort, 'low'); ?>><?php _e('Low (fastest)', 'wordpress-review-bot'); ?></option>
+                            <option value="medium" <?php selected($reasoning_effort, 'medium'); ?>><?php _e('Medium (balanced)', 'wordpress-review-bot'); ?></option>
+                            <option value="high" <?php selected($reasoning_effort, 'high'); ?>><?php _e('High (most accurate)', 'wordpress-review-bot'); ?></option>
+                        </select>
+                        <p class="description"><?php _e('Controls the depth of reasoning for GPT-5 models. Higher effort can increase accuracy and confidence at higher cost/time.', 'wordpress-review-bot'); ?></p>
+                        <p class="description" id="wrb_reasoning_effort_hint" style="display:none; color:#666;">
+                            <?php _e('Reasoning effort only applies to GPT-5 family models and is hidden for other selections.', 'wordpress-review-bot'); ?>
+                        </p>
                     </td>
                 </tr>
 
@@ -151,8 +169,8 @@ $model = isset($options['openai_model']) ? $options['openai_model'] : 'gpt-3.5-t
                         <label for="wrb_max_tokens"><?php _e('Max Tokens', 'wordpress-review-bot'); ?></label>
                     </th>
                     <td>
-                        <input type="number" name="wrb_options[max_tokens]" id="wrb_max_tokens" value="<?php echo esc_attr(isset($options['max_tokens']) ? $options['max_tokens'] : 150); ?>" min="50" max="1000" step="50">
-                        <p class="description"><?php _e('Maximum tokens for AI response. Higher values allow more detailed analysis but cost more.', 'wordpress-review-bot'); ?></p>
+                        <input type="number" name="wrb_options[max_tokens]" id="wrb_max_tokens" value="<?php echo esc_attr(isset($options['max_tokens']) ? $options['max_tokens'] : 150); ?>" min="50" step="50">
+                        <p class="description"><?php _e('Maximum tokens for AI response. Higher values allow more detailed analysis but cost more. No upper limit imposed by the plugin.', 'wordpress-review-bot'); ?></p>
                     </td>
                 </tr>
 
@@ -246,3 +264,23 @@ $model = isset($options['openai_model']) ? $options['openai_model'] : 'gpt-3.5-t
         </div>
     </div>
 </div>
+</div>
+<script>
+// Hide reasoning effort unless model starts with 'gpt-5'
+document.addEventListener('DOMContentLoaded', function() {
+    const modelSelect = document.getElementById('wrb_openai_model');
+    const reasoningRow = document.getElementById('wrb_reasoning_effort_row');
+    const hint = document.getElementById('wrb_reasoning_effort_hint');
+
+    function updateReasoningVisibility() {
+        if (!modelSelect || !reasoningRow) return;
+        const val = modelSelect.value || '';
+        const isGpt5 = val.startsWith('gpt-5');
+        reasoningRow.style.display = isGpt5 ? '' : 'none';
+        if (hint) hint.style.display = isGpt5 ? 'none' : 'block';
+    }
+
+    modelSelect && modelSelect.addEventListener('change', updateReasoningVisibility);
+    updateReasoningVisibility();
+});
+</script>

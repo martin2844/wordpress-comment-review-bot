@@ -11,15 +11,11 @@ if (!defined('ABSPATH')) {
 class WRB_Admin {
 
     /**
-     * Comment manager instance
-     */
-    private $comment_manager;
-
-    /**
      * Constructor
      */
     public function __construct() {
-        $this->comment_manager = new WRB_Comment_Manager();
+        // Note: WRB_Comment_Manager is already instantiated in the main plugin class
+        // Do NOT create a new instance here to avoid duplicate hooks
 
         add_action('admin_menu', array($this, 'add_menu_pages'));
         add_action('admin_init', array($this, 'register_settings'));
@@ -60,6 +56,16 @@ class WRB_Admin {
             'manage_options',
             'wrb-settings',
             array($this, 'render_settings_page')
+        );
+
+        // Submenu: Logs
+        add_submenu_page(
+            'wrb-dashboard',
+            __('Logs', 'wordpress-review-bot'),
+            __('Logs', 'wordpress-review-bot'),
+            'manage_options',
+            'wrb-logs',
+            array($this, 'render_logs_page')
         );
     }
 
@@ -112,8 +118,10 @@ class WRB_Admin {
      * Render main dashboard page
      */
     public function render_dashboard_page() {
-        $stats = $this->comment_manager->get_comment_stats();
-        $recent_pending = $this->comment_manager->get_pending_comments(5);
+        // Create a temporary instance to access methods
+        $comment_manager = new WRB_Comment_Manager();
+        $stats = $comment_manager->get_comment_stats();
+        $recent_pending = $comment_manager->get_pending_comments(5);
 
         include plugin_dir_path(__FILE__) . 'templates/dashboard-page.php';
     }
@@ -130,6 +138,13 @@ class WRB_Admin {
      */
     public function render_settings_page() {
         include plugin_dir_path(__FILE__) . 'templates/settings-page.php';
+    }
+
+    /**
+     * Render logs page
+     */
+    public function render_logs_page() {
+        include plugin_dir_path(__FILE__) . 'templates/logs-page.php';
     }
 
     /**
@@ -153,6 +168,20 @@ class WRB_Admin {
             $sanitized['openai_model'] = in_array($input['openai_model'], $allowed_models) ? $input['openai_model'] : 'gpt-5-mini';
         }
 
+        // Reasoning effort (for gpt-5 Responses API). Allow: low, medium, high. Default: low.
+        if (isset($input['reasoning_effort'])) {
+            $allowed_effort = array('low','medium','high');
+            $effort = strtolower(sanitize_text_field($input['reasoning_effort']));
+            $sanitized['reasoning_effort'] = in_array($effort, $allowed_effort) ? $effort : 'low';
+        } else {
+            // Preserve existing value if already set, otherwise default
+            if (!empty($this->get_existing_option('reasoning_effort'))) {
+                $sanitized['reasoning_effort'] = $this->get_existing_option('reasoning_effort');
+            } else {
+                $sanitized['reasoning_effort'] = 'low';
+            }
+        }
+
         // Auto-moderation enabled
         if (isset($input['auto_moderation_enabled'])) {
             $sanitized['auto_moderation_enabled'] = boolval($input['auto_moderation_enabled']);
@@ -163,9 +192,9 @@ class WRB_Admin {
             $sanitized['confidence_threshold'] = max(0.5, min(1.0, floatval($input['confidence_threshold'])));
         }
 
-        // Max tokens
+        // Max tokens - no limit, user can set as high as needed
         if (isset($input['max_tokens'])) {
-            $sanitized['max_tokens'] = max(50, min(1000, intval($input['max_tokens'])));
+            $sanitized['max_tokens'] = max(50, intval($input['max_tokens']));
         }
 
         // Temperature
@@ -193,6 +222,14 @@ class WRB_Admin {
         }
 
         return $sanitized;
+    }
+
+    /**
+     * Helper to get existing option value without re-sanitizing
+     */
+    private function get_existing_option($key) {
+        $opts = get_option('wrb_options', array());
+        return isset($opts[$key]) ? $opts[$key] : '';
     }
 
     /**

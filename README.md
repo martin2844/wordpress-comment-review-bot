@@ -1,203 +1,134 @@
-# WordPress Review Bot - Modern Development Setup
+# WordPress Comment Review Bot
 
-A modern WordPress plugin development environment with hot reloading, Docker integration, and 2025 best practices.
+AI-powered, non-blocking comment moderation for WordPress using OpenAI. Comments are saved immediately as pending and reviewed asynchronously; decisions and reasoning are logged for transparency.
 
-## 🚀 Features
+## Features
 
-- **Hot Reloading**: Live CSS and JavaScript updates during development
-- **Docker Environment**: Complete WordPress development stack with Docker Compose
-- **Modern Tooling**: Vite for JavaScript bundling, Tailwind CSS for styling
-- **WordPress 6.0+ Ready**: Compatible with the latest WordPress versions
-- **PHP 8.0+**: Modern PHP code structure and standards
-- **Database Management**: Includes phpMyAdmin for easy database access
+- Non-blocking moderation: users see “pending” immediately; AI review runs in the background
+- GPT-5 reasoning control: low/medium/high effort (only shown for GPT‑5 family models)
+- Confidence threshold: auto-approve/reject/spam only above your chosen bar
+- Pending Review workflow: low-confidence cases persist as `pending_review` (no re-analysis until manual review)
+- Rich logging: info/warning/error/debug logs stored in DB and visible in admin, with context
+- Admin UI for Settings, Decisions, Logs
+- Docker-based local development with phpMyAdmin
 
-## 📋 Prerequisites
+## Repository Layout
+
+- `docker-compose.yml` — WordPress, MySQL, phpMyAdmin stack
+- `wp-config.php` — Dev settings (WP_DEBUG, etc.)
+- `plugin/` — WordPress plugin source
+  - `wordpress-review-bot.php` — plugin bootstrap
+  - `includes/class-wrb-comment-manager.php` — moderation flow, scheduling, cron/tick, logging
+  - `admin/` — admin pages and templates (Settings, Decisions, Logs)
+  - `assets/` — compiled assets
+- `src/` — Tailwind/Vite source for styles and scripts
+
+## Prerequisites
 
 - Docker and Docker Compose
-- Node.js 18+ and npm
-- Git
+- Node 18+ (for building assets; optional if you use the prebuilt assets)
 
-## 🛠️ Quick Start
+## Quick Start
 
-1. **Clone and install dependencies:**
-   ```bash
-   git clone <your-repo-url>
-   cd wordpress-review-bot
-   npm install
-   ```
-
-2. **Start the development environment:**
-   ```bash
-   npm run dev
-   ```
-
-   This will:
-   - Start Docker containers (WordPress, MySQL, phpMyAdmin)
-   - Begin watching CSS and JavaScript files for changes
-   - Enable hot reloading
-
-3. **Access your development sites:**
-   - WordPress: http://localhost:8080
-   - phpMyAdmin: http://localhost:8081
-   - Database credentials:
-     - Host: `localhost:3306`
-     - User: `wordpress`
-     - Password: `wordpress`
-
-## 📁 Project Structure
-
-```
-wordpress-review-bot/
-├── plugin/                 # WordPress plugin files
-│   ├── wordpress-review-bot.php
-│   ├── assets/            # Compiled CSS/JS
-│   ├── admin/             # Admin-specific files
-│   ├── public/            # Frontend files
-│   └── includes/          # Core plugin functions
-├── src/                   # Development source files
-│   ├── css/
-│   └── js/
-├── mysql/                 # Database initialization
-├── docker-compose.yml     # Docker configuration
-├── wp-config.php         # WordPress configuration
-├── vite.config.js        # Vite bundler configuration
-├── tailwind.config.js    # Tailwind CSS configuration
-└── package.json          # Node dependencies and scripts
-```
-
-## 🔧 Development Workflow
-
-### Making Changes
-
-1. **CSS Changes**: Edit files in `src/css/input.css` - changes will be compiled to `plugin/assets/css/`
-2. **JavaScript Changes**: Edit files in `src/js/` - changes will be bundled to `plugin/assets/js/`
-3. **PHP Changes**: Edit files directly in `plugin/` - no build process needed
-
-### Available Scripts
+1. Clone the repo and install dependencies (optional for rebuilds)
 
 ```bash
-# Start full development environment
-npm run dev
-
-# Start/stop Docker containers
-npm run docker:up
-npm run docker:down
-
-# View Docker logs
-npm run docker:logs
-
-# Build assets for production
-npm run build
-
-# Watch CSS changes only
-npm run watch:css
-
-# Watch JavaScript changes only
-npm run watch:js
-
-# WordPress CLI commands
-npm run wp:cli <command>
-npm run wp:plugins:list
-npm run wp:plugin:activate
+# optional: only if you want to rebuild assets
+npm install
 ```
 
-## 🐳 Docker Services
+2. Start the stack
 
-The development environment includes three services:
+```bash
+# optional shortcut via package.json
+npm run docker:up
 
-1. **WordPress** (port 8080): Latest WordPress with debug mode enabled
-2. **MySQL 8.0** (port 3306): Database server with persistent storage
-3. **phpMyAdmin** (port 8081): Web-based database management
+# or with docker compose directly
+# docker-compose up -d
+```
 
-## 🎨 Styling with Tailwind CSS
+3. Open WordPress
 
-The project uses Tailwind CSS with WordPress-specific customizations:
+- App: http://localhost:8080/
+- phpMyAdmin: http://localhost:8081/
 
-- Custom colors for WordPress UI (`wp-blue`, `wp-dark`, `wp-gray`)
-- WordPress system font stack
-- Pre-built component classes for common plugin UI elements
+Complete the WordPress installer (site name, admin user, etc.).
 
-## 📝 Plugin Development
+4. Activate and configure the plugin
 
-### Basic Plugin Structure
+- Log into WP Admin → Plugins → Activate “WordPress Comment Review Bot”
+- Go to Review Bot → Settings
+  - Enter your OpenAI API key
+  - Choose a model (e.g., GPT‑5 Mini recommended)
+  - (GPT‑5 only) Set Reasoning Effort (low/medium/high)
+  - Set Confidence Threshold
+  - Enable “Auto‑Moderation” and choose which comment types to moderate
+  - Save
 
-The main plugin file (`plugin/wordpress-review-bot.php`) includes:
+5. Try it out
 
-- Proper WordPress plugin header
-- Class-based architecture
-- Hook registration for initialization
-- Asset loading for admin and frontend
-- Activation/deactivation hooks
+- Post a new comment on a post/page
+- It should appear as pending immediately
+- Within seconds to a minute (depending on cron/tick timing and model), AI will decide and update the comment status
+- Review outcomes in:
+  - Review Bot → Decisions
+  - Review Bot → Logs
 
-### Adding New Features
+## How It Works
 
-1. **Admin Pages**: Create PHP files in `plugin/admin/`
-2. **Frontend Features**: Create PHP files in `plugin/public/`
-3. **Core Functions**: Add to `plugin/includes/`
-4. **Assets**: Place compiled CSS/JS in `plugin/assets/`
+- Submission: Filter `pre_comment_approved` sets the comment to `0` (pending) instantly
+- Scheduling: Action `comment_post` schedules a per‑comment single event (`wrb_single_moderate_comment`) ~5 seconds later
+- Execution: The event handler calls OpenAI, saves a decision (`approve`/`spam`/`reject` or `pending_review`), and updates the comment
+- Observability: Each step logs to `wrb_logs` for audit and troubleshooting
+- Safety: A manual tick (`process_due_moderation_events`) runs on page loads to execute due events if WP‑Cron loopback is unreliable (e.g., in Docker)
 
-## 🔧 Configuration
+## Admin Pages
 
-### WordPress Configuration
+- Settings
+  - OpenAI API key, model selection, reasoning effort (GPT‑5 only), confidence threshold, auto‑moderation toggles
+- Decisions
+  - History with filters and a “Needs Manual Review” box for low‑confidence items
+- Logs
+  - Errors/Warnings/Info/Debug with context; summary counts and filters
 
-- Debug mode enabled for development
-- Development environment type set
-- Error logging enabled
-- Script debugging enabled
+## Development
 
-### Vite Configuration
+Build/watch assets locally (optional):
 
-- Builds JavaScript for admin and frontend separately
-- Supports hot module replacement
-- Outputs to plugin assets directory
+```bash
+npm run dev   # watch CSS & JS and bring up Docker
+# or
+npm run build # one‑time build
+```
 
-### Tailwind Configuration
+Useful scripts (optional):
 
-- Watches PHP files for class usage
-- WordPress-specific color palette
-- Custom component classes
+```bash
+npm run docker:logs               # follow WordPress logs
+npm run wp:plugins:list           # list plugins via WP‑CLI in the container
+npm run wp:plugin:activate        # activate this plugin via WP‑CLI
+```
 
-## 🚀 Production Deployment
+## Troubleshooting
 
-1. **Build assets:**
-   ```bash
-   npm run build
-   ```
+- No decisions appearing:
+  - Verify OpenAI API key in Settings
+  - Check Review Bot → Logs for errors; look for “Decision saved” info entries
+- Comment remains pending too long:
+  - The safety tick runs on page loads; browse any page to spur due events
+  - In dev containers, loopback cron can be flaky; the safety tick is designed to mitigate this
+- Low confidence results:
+  - Appear as `pending_review` and are not re‑analyzed until you handle them
 
-2. **Deploy plugin folder** to your WordPress site
+## Security Notes
 
-3. **Activate plugin** in WordPress admin
+- All internal actions are server‑side; asynchronous processing avoids exposing secrets client‑side
+- Where used, signatures (HMAC) are based on WordPress salts to prevent tampering
 
-## 🤝 Contributing
+## License
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Test thoroughly
-5. Submit a pull request
+MIT
 
-## 📚 Additional Resources
+## Changelog & Analysis
 
-- [WordPress Plugin Developer Handbook](https://developer.wordpress.org/plugins/)
-- [Tailwind CSS Documentation](https://tailwindcss.com/docs)
-- [Vite Documentation](https://vitejs.dev/)
-- [Docker Documentation](https://docs.docker.com/)
-
-## 🐛 Troubleshooting
-
-### Common Issues
-
-**Port conflicts**: If ports 8080, 8081, or 3306 are in use, modify them in `docker-compose.yml`
-
-**Permission issues**: Ensure Docker has proper permissions to bind mount volumes
-
-**Hot reloading not working**: Check that the build processes are running and watch for errors in the terminal
-
-**Database connection issues**: Ensure MySQL container is running and credentials are correct
-
-### Getting Help
-
-- Check Docker logs: `npm run docker:logs`
-- Verify file permissions in plugin directory
-- Ensure all Node dependencies are installed
-- Check WordPress debug log for PHP errors
+- See `IMPLEMENTATION_ANALYSIS.md` for a detailed analysis of the async overhaul and logging improvements.
