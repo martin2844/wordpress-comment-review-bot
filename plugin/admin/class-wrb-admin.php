@@ -21,6 +21,38 @@ class WRB_Admin {
         add_action('admin_init', array($this, 'register_settings'));
         add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_scripts'));
         add_action( 'admin_notices', array( $this, 'admin_notices' ) );
+        
+        // Remove default WordPress admin footer on our plugin pages
+        add_filter('admin_footer_text', array($this, 'remove_footer_admin'));
+        add_filter('update_footer', array($this, 'remove_footer_version'), 11);
+    }
+    
+    /**
+     * Remove WordPress admin footer text on plugin pages
+     */
+    public function remove_footer_admin($text) {
+        $screen = get_current_screen();
+        
+        // Only hide on our plugin pages
+        if ($screen && strpos($screen->id, 'wrb-') !== false) {
+            return '';
+        }
+        
+        return $text;
+    }
+    
+    /**
+     * Remove WordPress version from admin footer on plugin pages
+     */
+    public function remove_footer_version($text) {
+        $screen = get_current_screen();
+        
+        // Only hide on our plugin pages
+        if ($screen && strpos($screen->id, 'wrb-') !== false) {
+            return '';
+        }
+        
+        return $text;
     }
 
     /**

@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   wordpress:
     image: wordpress:latest
@@ -21,7 +19,6 @@ services:
     volumes:
       - ./wordpress:/var/www/html
       - ./plugin:/var/www/html/wp-content/plugins/wordpress-review-bot
-      - ./wp-config.php:/var/www/html/wp-config.php
     depends_on:
       - db
     networks:
@@ -41,21 +38,6 @@ services:
       - ./mysql/init.sql:/docker-entrypoint-initdb.d/init.sql
     ports:
       - "3306:3306"
-    networks:
-      - wordpress-network
-
-  phpmyadmin:
-    image: phpmyadmin:latest
-    container_name: wordpress-phpmyadmin
-    restart: unless-stopped
-    ports:
-      - "8081:80"
-    environment:
-      PMA_HOST: db
-      PMA_USER: root
-      PMA_PASSWORD: rootpassword
-    depends_on:
-      - db
     networks:
       - wordpress-network
 
