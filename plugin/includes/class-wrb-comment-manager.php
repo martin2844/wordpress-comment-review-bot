@@ -69,6 +69,9 @@ class WRB_Comment_Manager {
     // Immediately trigger async moderation after a comment is saved (non-blocking)
     add_action('comment_post', array($this, 'maybe_trigger_async_after_comment'), 20, 2);
 
+    // Track when comments are manually moderated outside the plugin
+    add_action('transition_comment_status', array($this, 'track_manual_moderation'), 10, 3);
+
     // Don't interfere with comment saving beyond setting to hold
     // Cron/async will process held comments later
 
@@ -276,6 +279,16 @@ class WRB_Comment_Manager {
             $stats[$row->decision] = intval($row->count);
             $stats['total'] += intval($row->count);
         }
+
+        // For pending_review, only count non-overridden decisions with pending comments
+        $pending_sql = "SELECT COUNT(*) as count
+                       FROM {$this->decisions_table} d
+                       LEFT JOIN {$wpdb->comments} c ON d.comment_id = c.comment_ID
+                       WHERE d.decision = 'pending_review'
+                       AND d.overridden = 0
+                       AND c.comment_approved = '0'";
+        $pending_result = $wpdb->get_row($pending_sql);
+        $stats['pending_review'] = $pending_result ? intval($pending_result->count) : 0;
 
         return $stats;
     }
@@ -2454,6 +2467,79 @@ class WRB_Comment_Manager {
         } else {
             error_log("WRB: Single-event already scheduled for comment #{$comment_id}");
             $this->log_event('debug', 'Single-event already scheduled', null, $comment_id);
+        }
+    }
+
+    /**
+     * Track manual moderation of comments outside the plugin
+     * Mark AI decisions as overridden when admin manually changes status
+     *
+     * @param string $new_status New comment status
+     * @param string $old_status Old comment status
+     * @param WP_Comment $comment Comment object
+     */
+    public function track_manual_moderation($new_status, $old_status, $comment) {
+        // Only process if status actually changed
+        if ($new_status === $old_status) {
+            return;
+        }
+
+        // Skip if this is a new comment (no previous decision to override)
+        if ($old_status === 'hold' || $old_status === '0') {
+            // Check if there's already a decision
+            $decision = $this->get_comment_decision($comment->comment_ID);
+            if (!$decision) {
+                return; // No decision yet, nothing to override
+            }
+        }
+
+        // Only track transitions to approved, spam, or trash
+        if (!in_array($new_status, array('approved', 'spam', 'trash'), true)) {
+            return;
+        }
+
+        global $wpdb;
+
+        // Check if there's an AI decision for this comment
+        $decision = $this->get_comment_decision($comment->comment_ID);
+        
+        if ($decision) {
+            // Check if this change is coming from our own AJAX handlers
+            // to avoid double-marking as overridden
+            $is_plugin_action = defined('DOING_AJAX') && 
+                                isset($_POST['action']) && 
+                                strpos($_POST['action'], 'wrb_') === 0;
+
+            if (!$is_plugin_action && !$decision->overridden) {
+                // Get current user
+                $current_user = wp_get_current_user();
+                $user_display = $current_user->user_login ?: 'system';
+
+                // Mark as overridden
+                $wpdb->update(
+                    $this->decisions_table,
+                    array(
+                        'overridden' => 1,
+                        'overridden_by' => $user_display,
+                        'overridden_at' => current_time('mysql')
+                    ),
+                    array('id' => $decision->id),
+                    array('%d', '%s', '%s'),
+                    array('%d')
+                );
+
+                $this->log_event(
+                    'info',
+                    'AI decision manually overridden',
+                    array(
+                        'comment_id' => $comment->comment_ID,
+                        'ai_decision' => $decision->decision,
+                        'new_status' => $new_status,
+                        'overridden_by' => $user_display
+                    ),
+                    $comment->comment_ID
+                );
+            }
         }
     }
 }
