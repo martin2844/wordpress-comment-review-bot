@@ -31,6 +31,11 @@ class WRB_Comment_Manager {
     private $ai_decisions;
 
     /**
+     * Exporter module instance
+     */
+    private $exporter;
+
+    /**
      * Constructor
      */
     public function __construct() {
@@ -41,6 +46,10 @@ class WRB_Comment_Manager {
         // Initialize AI decisions module
         require_once plugin_dir_path(__FILE__) . 'class-wrb-ai-decisions.php';
         $this->ai_decisions = new WRB_AI_Decisions();
+
+        // Initialize exporter module
+        require_once plugin_dir_path(__FILE__) . 'class-wrb-exporter.php';
+        $this->exporter = new WRB_Exporter();
 
         // Set table names from modules
         $this->decisions_table = $this->ai_decisions->get_decisions_table();
@@ -525,9 +534,11 @@ class WRB_Comment_Manager {
         $decisions = $this->get_ai_decisions($args);
 
         if ($format === 'csv') {
-            $this->export_csv($decisions);
+            $this->exporter->export_csv($decisions);
         } elseif ($format === 'json') {
-            $this->export_json($decisions);
+            $this->exporter->export_json($decisions);
+        } elseif ($format === 'xml') {
+            $this->exporter->export_xml($decisions);
         } else {
             wp_send_json_error(array(
                 'message' => __('Invalid export format', 'wordpress-review-bot')
@@ -573,67 +584,6 @@ class WRB_Comment_Manager {
             'message' => sprintf(__('%d sample decisions generated successfully', 'wordpress-review-bot'), $generated),
             'generated' => $generated
         ));
-    }
-
-    /**
-     * Export decisions as CSV
-     */
-    private function export_csv($decisions) {
-        header('Content-Type: text/csv');
-        header('Content-Disposition: attachment; filename="ai-decisions.csv"');
-
-        $output = fopen('php://output', 'w');
-
-        // CSV headers
-        fputcsv($output, array(
-            'ID', 'Comment ID', 'Author', 'Decision', 'Confidence',
-            'Reasoning', 'Model Used', 'Processing Time', 'Date'
-        ));
-
-        foreach ($decisions as $decision) {
-            fputcsv($output, array(
-                $decision->id,
-                $decision->comment_id,
-                $decision->comment_author,
-                $decision->decision,
-                $decision->confidence,
-                strip_tags($decision->reasoning),
-                $decision->model_used,
-                $decision->processing_time,
-                $decision->created_at
-            ));
-        }
-
-        fclose($output);
-        exit;
-    }
-
-    /**
-     * Export decisions as JSON
-     */
-    private function export_json($decisions) {
-        header('Content-Type: application/json');
-        header('Content-Disposition: attachment; filename="ai-decisions.json"');
-
-        $export_data = array();
-        foreach ($decisions as $decision) {
-            $export_data[] = array(
-                'id' => $decision->id,
-                'comment_id' => $decision->comment_id,
-                'comment_author' => $decision->comment_author,
-                'comment_content' => $decision->comment_content,
-                'decision' => $decision->decision,
-                'confidence' => $decision->confidence,
-                'reasoning' => $decision->reasoning,
-                'model_used' => $decision->model_used,
-                'processing_time' => $decision->processing_time,
-                'created_at' => $decision->created_at,
-                'post_title' => $decision->post_title
-            );
-        }
-
-        echo json_encode($export_data, JSON_PRETTY_PRINT);
-        exit;
     }
 
     /**
