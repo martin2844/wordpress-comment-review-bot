@@ -113,31 +113,48 @@ $current_page = isset($_GET['paged']) ? max(1, intval($_GET['paged'])) : 1;
     <div class="wrb-decisions-list">
 
             <?php
-            // Pending review box (always show if there are any pending_review decisions and not currently filtering to only them)
-            $pending_args = array(
-                'limit' => 10,
-                'offset' => 0,
-                'decision' => 'pending_review',
-                'orderby' => 'created_at',
-                'order' => 'DESC'
-            );
-            $pending_decisions = $comment_manager->get_ai_decisions($pending_args);
+            // Pending review box - show unresolved pending_review decisions only
+            global $wpdb;
+            $decisions_table = $wpdb->prefix . 'wrb_ai_decisions';
+            $pending_sql = "SELECT d.*, c.comment_author, c.comment_content, c.comment_approved
+                           FROM {$decisions_table} d
+                           LEFT JOIN {$wpdb->comments} c ON d.comment_id = c.comment_ID
+                           WHERE d.decision = 'pending_review'
+                           AND d.overridden = 0
+                           AND c.comment_approved = '0'
+                           ORDER BY d.created_at DESC
+                           LIMIT 10";
+            $pending_decisions = $wpdb->get_results($pending_sql);
+            
             if (!empty($pending_decisions) && $decision_filter !== 'pending_review') : ?>
-                <div class="wrb-pending-review-box">
-                    <h2><?php _e('Needs Manual Review', 'wordpress-review-bot'); ?></h2>
-                    <p class="description"><?php _e('These comments had a low confidence score. Review and override if appropriate. They will not be re-analyzed.', 'wordpress-review-bot'); ?></p>
-                    <div class="wrb-pending-review-list">
-                        <?php foreach ($pending_decisions as $p): ?>
-                            <div class="wrb-pending-item">
-                                <strong>#<?php echo esc_html($p->comment_id); ?></strong>
-                                <span class="wrb-pending-confidence"><?php printf(__('Confidence: %s%%', 'wordpress-review-bot'), round($p->confidence * 100)); ?></span>
-                                <span class="wrb-pending-reasoning" style="display:block;margin-top:4px;">
-                                    <?php echo esc_html(wp_trim_words($p->reasoning, 25)); ?>
+                <div class="wrb-alert wrb-alert-warning" style="margin-bottom: 20px;">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <span class="dashicons dashicons-warning" style="font-size: 24px; color: #f0b849;"></span>
+                        <div style="flex: 1;">
+                            <h3 style="margin: 0 0 4px 0; font-size: 16px;"><?php printf(__('%d Comments Need Manual Review', 'wordpress-review-bot'), count($pending_decisions)); ?></h3>
+                            <p style="margin: 0; opacity: 0.8;"><?php _e('These comments had a low confidence score and require your review.', 'wordpress-review-bot'); ?></p>
+                        </div>
+                        <a href="<?php echo esc_url(add_query_arg('decision','pending_review', admin_url('admin.php?page=wrb-decisions'))); ?>" class="button button-primary"><?php _e('Review Now', 'wordpress-review-bot'); ?></a>
+                    </div>
+                    
+                    <div class="wrb-pending-preview" style="margin-top: 16px; display: grid; gap: 8px;">
+                        <?php foreach (array_slice($pending_decisions, 0, 3) as $p): ?>
+                            <div style="background: rgba(255,255,255,0.5); padding: 12px; border-radius: 4px; display: flex; align-items: center; gap: 12px;">
+                                <strong style="min-width: 60px;">#<?php echo esc_html($p->comment_id); ?></strong>
+                                <span style="background: #f0b849; color: #000; padding: 2px 8px; border-radius: 3px; font-size: 12px; font-weight: 600;">
+                                    <?php printf(__('%d%% confidence', 'wordpress-review-bot'), round($p->confidence * 100)); ?>
                                 </span>
-                                <a class="wrb-view-full" href="<?php echo esc_url(admin_url('comment.php?action=editcomment&c=' . $p->comment_id)); ?>" target="_blank"><?php _e('View Comment', 'wordpress-review-bot'); ?></a>
+                                <span style="flex: 1; opacity: 0.8; font-size: 13px;">
+                                    <?php echo esc_html(wp_trim_words($p->comment_content, 15)); ?>
+                                </span>
+                                <a href="<?php echo esc_url(admin_url('comment.php?action=editcomment&c=' . $p->comment_id)); ?>" target="_blank" class="button button-small"><?php _e('Review', 'wordpress-review-bot'); ?></a>
                             </div>
                         <?php endforeach; ?>
-                        <p><a href="<?php echo esc_url(add_query_arg('decision','pending_review', admin_url('admin.php?page=wrb-decisions'))); ?>" class="button button-small"><?php _e('View All Pending Review', 'wordpress-review-bot'); ?></a></p>
+                        <?php if (count($pending_decisions) > 3): ?>
+                            <p style="margin: 8px 0 0 0; text-align: center; opacity: 0.7;">
+                                <?php printf(__('... and %d more', 'wordpress-review-bot'), count($pending_decisions) - 3); ?>
+                            </p>
+                        <?php endif; ?>
                     </div>
                 </div>
             <?php endif; ?>

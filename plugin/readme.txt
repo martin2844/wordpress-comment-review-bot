@@ -1,5 +1,5 @@
 === WordPress Review Bot ===
-Contributors: martindev
+Contributors: martin2844 
 Tags: comments, moderation, ai, openai, spam, automation, artificial intelligence
 Requires at least: 6.0
 Tested up to: 6.7
